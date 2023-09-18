@@ -20,6 +20,9 @@ async def start_conversation() -> ConversationInDB:
 @guest_router.post("/add_item/")
 async def dialog(conv_in: ConversationIn) -> ConversationInDB:
     await OrderController.write_replica(conn_db, conv_in)
+    
+    if await OrderController.was_suggested(conn_db, conv_in.order_id):
+        return await upsell(conn_db, conv_in)
 
     if "I'd like a" in conv_in.replica:
         return await OrderController.add_item(conn_db, conv_in)
@@ -29,18 +32,24 @@ async def dialog(conv_in: ConversationIn) -> ConversationInDB:
     
     elif "That's all." == conv_in.replica:
         return await OrderController.close_conversation(conn_db, conv_in)
+    
     #elif "What is a" in conv_in.replica:
     #    pass  # TODO: create OpenAI client for request
+    
     else:
         return await OrderController._error_answer(conn_db, conv_in.order_id)
 
-@guest_router.post("/upsell_item/")
-async def upsell(conv_in: ConversationIn):
-    if "No, thank you." == conv_in.replica:  # item that was suggsted would be deleted
-        return await OrderController.discard_last_item(conn_db, conv_in)
 
-    elif "Yes, please." == conv_in.replica:  # item is adding by default
-        return await OrderController._suggest_next_item_answer(conn_db, conv_in.order_id)
+
+async def upsell(conn_db, conv_in: ConversationIn) -> ConversationInDB:
     
+    if "Yes, please." == conv_in.replica:  # item is added by default
+        await OrderController.set_was_suggested(conn_db, conv_in.order_id, "false")
+        return await OrderController._suggest_next_item_answer(conn_db, conv_in.order_id)
+
+    elif "No, thank you." == conv_in.replica:  # item that was suggsted would be deleted
+        await OrderController.set_was_suggested(conn_db, conv_in.order_id, "false")
+        return await OrderController.discard_last_item(conn_db, conv_in)
+  
     else:
         return await OrderController._error_answer(conn_db, conv_in.order_id)

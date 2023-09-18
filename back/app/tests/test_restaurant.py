@@ -37,7 +37,7 @@ async def test_order_suggested_item_accept(ac: AsyncClient):
     order_id = await start_order(ac)
     replica = "Yes, please."
     conv_user = {**default(order_id), "replica": replica}
-    response = await ac.post("/guest/upsell_item/", json=conv_user)
+    response = await ac.post("/guest/add_item/", json=conv_user)
     
     conv_bot = ConversationInDB(**response.json())
     assert conv_bot.replica == "Would you like anything else?"
@@ -53,7 +53,7 @@ async def test_order_suggested_item_deny(ac: AsyncClient):
     order_id = await start_order(ac)
     replica = "No, thank you."
     conv_user = {**default(order_id), "replica": replica}
-    response = await ac.post("/guest/upsell_item/", json=conv_user)
+    response = await ac.post("/guest/add_item/", json=conv_user)
     
     conv_bot = ConversationInDB(**response.json())
     assert conv_bot.replica == "Would you like anything else?"
@@ -67,12 +67,12 @@ async def test_order_suggested_item_deny(ac: AsyncClient):
     
 async def test_run_out_of_item(ac: AsyncClient):
     order_id = await start_order(ac)
-    #replica = "No, thank you."
-    #conv_user = {**default(order_id), "replica": replica}
-    #response = await ac.post("/guest/upsell_item/", json=conv_user)
-    #
-    #conv_bot = ConversationInDB(**response.json())
-    #assert conv_bot.replica == "Would you like anything else?"
+    replica = "No, thank you."
+    conv_user = {**default(order_id), "replica": replica}
+    response = await ac.post("/guest/add_item/", json=conv_user)
+
+    conv_bot = ConversationInDB(**response.json())
+    assert conv_bot.replica == "Would you like anything else?"
     replica =                                                       "I'd like a Croissant"
     conv_user = {**default(order_id), "replica": replica}
     for i in range(98):
@@ -87,8 +87,17 @@ async def test_run_out_of_item(ac: AsyncClient):
     response = await ac.post("/guest/add_item/", json=conv_user)
     conv_bot = ConversationInDB(**response.json())
     
-    # if lines upper is commented would fault cause item Coffe would 
-    # be added automaticly
-    # not captured situation wneh after upsell user send 
-    # any answer
     assert conv_bot.replica == f"Your total is ${98*2.14}. Thank you and have a nice day!"
+    
+
+async def test_order_first_item_secondary(ac: AsyncClient):
+    response = await ac.get("/guest/start_conversation/")
+    assert response.status_code == 200
+    conv_bot = ConversationInDB(**response.json())
+
+    replica =                                                       "I'd like a Coffee"
+    conv_user = {**default(conv_bot.order_id), "replica": replica}
+    response = await ac.post("/guest/add_item/", json=conv_user)
+    
+    conv_bot = ConversationInDB(**response.json())
+    assert conv_bot.replica ==                                      "Would you like anything else?"

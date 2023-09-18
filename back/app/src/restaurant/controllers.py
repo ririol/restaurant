@@ -78,12 +78,9 @@ class OrderController:
         stmt = f"""
                 INSERT INTO public.order_items (order_id, item_id)
                 VALUES ({order_id}, {upsell_item.id});
-                
-                UPDATE public.order
-                SET was_suggested = true
-                WHERE id = {order_id};
                 """
         await db.fetch_rows(stmt)
+        await OrderController.set_was_suggested(db, order_id, "true")
         # TODO: provide a(an) logic
         return await OrderController._upsell_item_answer(db, order_id, upsell_item)
 
@@ -120,6 +117,38 @@ class OrderController:
 
 
     @staticmethod
+    async def set_was_suggested(db: ConnectionDB, order_id: int, bools:str):
+        stmt = f"""
+                UPDATE public.order 
+                SET was_suggested = {bools} 
+                WHERE id = {order_id}
+                RETURNING was_suggested;
+                """
+        result = await db.fetch_rows(stmt)
+
+    @staticmethod
+    async def was_suggested(db: ConnectionDB, order_id: int) -> bool:
+        stmt = f"""
+                SELECT was_suggested
+                FROM public.order
+                WHERE id = {order_id}
+                """
+        result = await db.fetch_rows(stmt)
+        return result[0][0]
+        
+        
+    @staticmethod
+    async def get_order_length(db: ConnectionDB, order_id: int) -> int:
+        stmt = f"""
+                SELECT COUNT(*)
+                FROM order_items
+                WHERE order_id = {order_id};
+                """
+        result = await db.fetch_rows(stmt)
+        order_len = result[0][0]
+        return order_len
+
+    @staticmethod
     async def add_item(db: ConnectionDB, conv_in: ConversationIn):
         order_id = conv_in.order_id
         item: ItemInDB = await OrderController._get_item_by_name(db, conv_in) #type: ignore
@@ -136,12 +165,34 @@ class OrderController:
                 """
         await db.fetch_rows(stmt)
 
-        order = await OrderController.get_order(db, order_id)
-        if not order.was_suggested:
-            
+        upsell_item = await OrderController.check_upsell(db, order_id)
+        order_len = await OrderController.get_order_length(db, order_id)
+        
+        if upsell_item and order_len == 1:
             return await OrderController._add_random_upsell_item_to_order(db, order_id)
         
         return await OrderController._suggest_next_item_answer(db, order_id)
+    
+    @staticmethod
+    async def check_upsell(db: ConnectionDB, order_id: int) -> bool:
+        stmt = f"""
+                SELECT 
+                    CASE 
+                        WHEN EXISTS (
+                            SELECT 1
+                            FROM order_items oi
+                            JOIN item i ON oi.item_id = i.id
+                            WHERE oi.order_id = {order_id} AND i.is_primary = false
+                        ) THEN false
+                        ELSE true
+                    END AS are_items_not_primary
+                FROM
+                    public.order o
+                WHERE 
+                    o.id = {order_id}
+                """
+        result = await db.fetch_rows(stmt)
+        return result[0][0]
 
 
     @staticmethod
