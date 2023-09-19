@@ -20,7 +20,7 @@ async def start_conversation() -> ConversationInDB:
 @guest_router.post("/add_item/")
 async def dialog(conv_in: ConversationIn) -> ConversationInDB:
     await OrderController.write_replica(conn_db, conv_in)
-    
+
     if await OrderController.was_suggested(conn_db, conv_in.order_id):
         return await upsell(conn_db, conv_in)
 
@@ -29,27 +29,27 @@ async def dialog(conv_in: ConversationIn) -> ConversationInDB:
 
     elif "I don't want a" in conv_in.replica:
         return await OrderController.discard_item(conn_db, conv_in)
-    
+
     elif "That's all." == conv_in.replica:
         return await OrderController.close_conversation(conn_db, conv_in)
-    
-    #elif "What is a" in conv_in.replica:
-    #    pass  # TODO: create OpenAI client for request
-    
+
+    elif "What is a" in conv_in.replica:
+        return await OrderController._chat_gpt_describe_answer(conn_db, conv_in)
+
     else:
         return await OrderController._error_answer(conn_db, conv_in.order_id)
 
 
-
 async def upsell(conn_db, conv_in: ConversationIn) -> ConversationInDB:
-    
     if "Yes, please." == conv_in.replica:  # item is added by default
         await OrderController.set_was_suggested(conn_db, conv_in.order_id, "false")
-        return await OrderController._suggest_next_item_answer(conn_db, conv_in.order_id)
+        return await OrderController._suggest_next_item_answer(
+            conn_db, conv_in.order_id
+        )
 
     elif "No, thank you." == conv_in.replica:  # item that was suggsted would be deleted
         await OrderController.set_was_suggested(conn_db, conv_in.order_id, "false")
         return await OrderController.discard_last_item(conn_db, conv_in)
-  
+
     else:
         return await OrderController._error_answer(conn_db, conv_in.order_id)

@@ -48,13 +48,15 @@ def init_tables():
         with open(sql_script_path, "r") as script_file:
             sql_script = script_file.read()
             cursor.execute(sql_script)
-        cursor.execute(f"COPY public.item FROM '{item_csv_path}' DELIMITER ',' CSV HEADER;")
+        cursor.execute(
+            f"COPY public.item FROM '{item_csv_path}' DELIMITER ',' CSV HEADER;"
+        )
         conn.commit()
         conn.close()
     except ps.Error as e:
         delete_db()
         raise Exception(f"Error initializing the test database: {e}")
-    
+
 
 async def startup_db():
     app.state.conn_db = conn_db

@@ -7,6 +7,7 @@ DSN = (
     f"dbname={DB_NAME} user={DB_USER} password={DB_PASS} host={DB_HOST} port={DB_PORT}"
 )
 
+
 class ConnectionDB:
     def __init__(self) -> None:
         self.pool: aiopg.Pool
@@ -26,7 +27,7 @@ class ConnectionDB:
     async def release_db(self, conn: aiopg.Connection) -> None:
         self.pool.release(conn)
 
-    async def fetch_rows(self, query: str, values = None) -> list[tuple] | list:
+    async def fetch_rows(self, query: str, values=None) -> list[tuple] | list:
         async with self.pool.acquire() as conn:
             async with conn.cursor() as cur:
                 await cur.execute(query, values)

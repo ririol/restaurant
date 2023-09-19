@@ -5,6 +5,7 @@ from app.src.restaurant.schemas import (
     ItemInDB,
     OrderInDB,
 )
+from app.src.restaurant.client import get_item_description
 
 
 class OrderController:
@@ -32,7 +33,7 @@ class OrderController:
     @staticmethod
     async def _get_item_by_name(db: ConnectionDB, conv_in: ConversationIn):
         item_pos = conv_in.replica.find(" a")
-        item_name = conv_in.replica[item_pos+3:].strip()
+        item_name = conv_in.replica[item_pos + 3 :].strip()
         stmt = f"""
                 SELECT ROW_TO_JSON(item.*)
                 FROM item
@@ -45,7 +46,6 @@ class OrderController:
             return result
         return ItemInDB(**result[0][0])
 
-
     @staticmethod
     async def _error_answer(db: ConnectionDB, conv_id: int):
         replica = "I don't understand."
@@ -53,19 +53,52 @@ class OrderController:
 
         return await OrderController.write_replica(db, conv_answer)
 
-
     @staticmethod
-    async def _no_item_asnwer(db: ConnectionDB, order_id: int, item_name: str):
+    async def _no_item_answer(db: ConnectionDB, order_id: int, item_name: str):
         replica = f"I’m sorry but we’re out of {item_name}"
         conv_out = ConversationIn(order_id=order_id, owner="bot", replica=replica)
 
         return await OrderController.write_replica(db, conv_out)
 
+    @staticmethod
+    async def _suggest_next_item_answer(db: ConnectionDB, order_id: int):
+        replica = "Would you like anything else?"
+        conv_out = ConversationIn(order_id=order_id, owner="bot", replica=replica)
+
+        return await OrderController.write_replica(db, conv_out)
 
     @staticmethod
-    async def _add_random_upsell_item_to_order(
-        db: ConnectionDB, order_id: int
+    async def _upsell_item_answer(
+        db: ConnectionDB, order_id: int, upsell_item: ItemInDB
     ):
+        replica = (
+            f"Would you like to add a {upsell_item.name} for ${upsell_item.price}?"
+        )
+        conv_out = ConversationIn(order_id=order_id, owner="bot", replica=replica)
+
+        return await OrderController.write_replica(db, conv_out)
+
+    @staticmethod
+    async def _close_conversation_answer(db: ConnectionDB, conv_in: ConversationIn):
+        order = await OrderController.get_order(db, conv_in.order_id)
+        replica = f"Your total is ${order.total}. Thank you and have a nice day!"
+        conv_out = ConversationIn(
+            order_id=conv_in.order_id, owner="bot", replica=replica
+        )
+        return await OrderController.write_replica(db, conv_out)
+
+    @staticmethod
+    async def _chat_gpt_describe_answer(db: ConnectionDB, conv_in: ConversationIn):
+        item: ItemInDB = await OrderController._get_item_by_name(db, conv_in)  # type: ignore
+
+        openai_answer = await get_item_description(item.name)
+        conv_out = ConversationIn(
+            order_id=conv_in.order_id, owner="bot", replica=openai_answer
+        )
+        return await OrderController.write_replica(db, conv_out)
+
+    @staticmethod
+    async def _add_random_upsell_item_to_order(db: ConnectionDB, order_id: int):
         stmt = f"""
                 SELECT ROW_TO_JSON(item.*)
                 FROM item
@@ -76,32 +109,13 @@ class OrderController:
         result = await db.fetch_rows(stmt)
         upsell_item = ItemInDB(**result[0][0])
         stmt = f"""
-                INSERT INTO public.order_items (order_id, item_id)
-                VALUES ({order_id}, {upsell_item.id});
+                INSERT INTO public.order_items (order_id, item_id, is_upselled)
+                VALUES ({order_id}, {upsell_item.id}, true);
                 """
         await db.fetch_rows(stmt)
         await OrderController.set_was_suggested(db, order_id, "true")
         # TODO: provide a(an) logic
         return await OrderController._upsell_item_answer(db, order_id, upsell_item)
-
-
-    @staticmethod
-    async def _upsell_item_answer(db: ConnectionDB, order_id: int, upsell_item: ItemInDB):
-        replica = (
-            f"Would you like to add a {upsell_item.name} for ${upsell_item.price}?"
-        )
-        conv_out = ConversationIn(order_id=order_id, owner="bot", replica=replica)
-
-        return await OrderController.write_replica(db, conv_out)
-
-
-    @staticmethod
-    async def _suggest_next_item_answer(db: ConnectionDB, order_id: int):
-        replica = "Would you like anything else?"
-        conv_out = ConversationIn(order_id=order_id, owner="bot", replica=replica)
-
-        return await OrderController.write_replica(db, conv_out)
-
 
     @staticmethod
     async def get_order(db: ConnectionDB, order_id: int) -> OrderInDB:
@@ -115,9 +129,8 @@ class OrderController:
 
         return order
 
-
     @staticmethod
-    async def set_was_suggested(db: ConnectionDB, order_id: int, bools:str):
+    async def set_was_suggested(db: ConnectionDB, order_id: int, bools: str):
         stmt = f"""
                 UPDATE public.order 
                 SET was_suggested = {bools} 
@@ -135,8 +148,7 @@ class OrderController:
                 """
         result = await db.fetch_rows(stmt)
         return result[0][0]
-        
-        
+
     @staticmethod
     async def get_order_length(db: ConnectionDB, order_id: int) -> int:
         stmt = f"""
@@ -151,13 +163,13 @@ class OrderController:
     @staticmethod
     async def add_item(db: ConnectionDB, conv_in: ConversationIn):
         order_id = conv_in.order_id
-        item: ItemInDB = await OrderController._get_item_by_name(db, conv_in) #type: ignore
+        item: ItemInDB = await OrderController._get_item_by_name(db, conv_in)  # type: ignore
 
         if not item:
             return await OrderController._error_answer(db, order_id)
 
         if item.count <= 0:
-            return await OrderController._no_item_asnwer(db, order_id, item.name)
+            return await OrderController._no_item_answer(db, order_id, item.name)
 
         stmt = f"""
                 INSERT INTO public.order_items (order_id, item_id)
@@ -167,12 +179,12 @@ class OrderController:
 
         upsell_item = await OrderController.check_upsell(db, order_id)
         order_len = await OrderController.get_order_length(db, order_id)
-        
+
         if upsell_item and order_len == 1:
             return await OrderController._add_random_upsell_item_to_order(db, order_id)
-        
+
         return await OrderController._suggest_next_item_answer(db, order_id)
-    
+
     @staticmethod
     async def check_upsell(db: ConnectionDB, order_id: int) -> bool:
         stmt = f"""
@@ -194,17 +206,6 @@ class OrderController:
         result = await db.fetch_rows(stmt)
         return result[0][0]
 
-
-    @staticmethod
-    async def _close_conversation_answer(db: ConnectionDB, conv_in: ConversationIn):
-        order = await OrderController.get_order(db, conv_in.order_id)
-        replica = f"Your total is ${order.total}. Thank you and have a nice day!"
-        conv_out = ConversationIn(
-            order_id=conv_in.order_id, owner="bot", replica=replica
-        )
-        return await OrderController.write_replica(db, conv_out)
-    
-    
     @staticmethod
     async def close_conversation(db: ConnectionDB, conv_in: ConversationIn):
         stmt = f"""
@@ -213,16 +214,15 @@ class OrderController:
                 WHERE id = {conv_in.order_id}
                 """
         await db.fetch_rows(stmt)
-        
-        return await OrderController._close_conversation_answer(db, conv_in)
 
+        return await OrderController._close_conversation_answer(db, conv_in)
 
     @staticmethod
     async def discard_item(db: ConnectionDB, conv_in: ConversationIn):
-        item: ItemInDB = await OrderController._get_item_by_name(db, conv_in) #type: ignore
+        item: ItemInDB = await OrderController._get_item_by_name(db, conv_in)  # type: ignore
         if not item:
             return await OrderController._error_answer(db, conv_in.order_id)
-        
+
         order_length = await OrderController._check_order_length(db, conv_in)
         if order_length == 0:
             return await OrderController._error_answer(db, conv_in.order_id)
@@ -237,7 +237,7 @@ class OrderController:
                     LIMIT 1);
                 """
         await db.fetch_rows(stmt)
-        
+
         return await OrderController._suggest_next_item_answer(db, conv_in.order_id)
 
     @staticmethod
@@ -250,14 +250,13 @@ class OrderController:
         result = await db.fetch_rows(stmt)
         order_len = result[0][0]
         return order_len
-        
+
     @staticmethod
     async def discard_last_item(db: ConnectionDB, conv_in: ConversationIn):
-        
         order_length = await OrderController._check_order_length(db, conv_in)
         if order_length == 0:
             return await OrderController._error_answer(db, conv_in.order_id)
-        
+
         stmt = f"""
                 DELETE FROM order_items 
                 WHERE id in (
@@ -267,5 +266,15 @@ class OrderController:
                     LIMIT 1);
                 """
         await db.fetch_rows(stmt)
-        
-        return await OrderController._suggest_next_item_answer(db, conv_in.order_id)        
+
+        return await OrderController._suggest_next_item_answer(db, conv_in.order_id)
+
+    @staticmethod
+    async def get_list_of_items(db: ConnectionDB) -> list[ItemInDB]:
+        stmt = f"""
+                SELECT ROW_TO_JSON(i.*) 
+                FROM item AS i
+                ORDER BY i.id;
+                """
+        result = await db.fetch_rows(stmt)
+        return [ItemInDB(**i[0]) for i in result]

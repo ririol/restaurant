@@ -9,6 +9,7 @@ app = FastAPI()
 app.include_router(guest_router)
 app.include_router(admin_router)
 
+
 @app.on_event("startup")
 async def startup_db():
     app.state.conn_db = conn_db

@@ -112,7 +112,7 @@ SET default_table_access_method = heap;
 
 CREATE TABLE public.conversation (
     order_id integer NOT NULL,
-    "time" timestamp without time zone DEFAULT date_trunc('second'::text, timezone('utc'::text, now())) NOT NULL,
+    "time" timestamp without time zone DEFAULT date_trunc('second'::text, (now())::timestamp without time zone) NOT NULL,
     owner character varying(10) NOT NULL,
     replica character varying(512) NOT NULL
 );
@@ -156,9 +156,9 @@ ALTER TABLE public.item ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
 CREATE TABLE public."order" (
     id integer NOT NULL,
     total numeric(6,2) DEFAULT 0 NOT NULL,
-    "time" timestamp without time zone DEFAULT date_trunc('second'::text, timezone('utc'::text, now())),
-    was_suggested boolean DEFAULT false,
-    is_closed boolean DEFAULT false
+    "time" timestamp without time zone DEFAULT date_trunc('second'::text, (now())::timestamp without time zone) NOT NULL,
+    was_suggested boolean DEFAULT false NOT NULL,
+    is_closed boolean DEFAULT false NOT NULL
 );
 
 
@@ -185,7 +185,8 @@ ALTER TABLE public."order" ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
 CREATE TABLE public.order_items (
     order_id integer NOT NULL,
     item_id integer NOT NULL,
-    id integer NOT NULL
+    id integer NOT NULL,
+    is_upselled boolean DEFAULT false NOT NULL
 );
 
 
