@@ -17,10 +17,9 @@ async def start_conversation() -> ConversationInDB:
     return await OrderController.write_replica(conn_db, conv)
 
 
-@guest_router.post("/add_item/")
+@guest_router.post("/dialog/")
 async def dialog(conv_in: ConversationIn) -> ConversationInDB:
     await OrderController.write_replica(conn_db, conv_in)
-
     if await OrderController.was_suggested(conn_db, conv_in.order_id):
         return await upsell(conn_db, conv_in)
 

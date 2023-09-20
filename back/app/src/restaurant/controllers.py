@@ -1,3 +1,5 @@
+import re
+
 from app.src.db import ConnectionDB
 from app.src.restaurant.schemas import (
     ConversationIn,
@@ -6,6 +8,8 @@ from app.src.restaurant.schemas import (
     OrderInDB,
 )
 from app.src.restaurant.client import get_item_description
+
+SPECIAL_SYMBOLS = "!@#$%^&*()_+{}\[\]:;<>,.?~\\|`\"'"
 
 
 class OrderController:
@@ -34,10 +38,15 @@ class OrderController:
     async def _get_item_by_name(db: ConnectionDB, conv_in: ConversationIn):
         item_pos = conv_in.replica.find(" a")
         item_name = conv_in.replica[item_pos + 3 :].strip()
+        special_symbols = "!@#$%^&*()_+{}\[\]:;<>,.?~\\|`\"'"
+
+        translation_table = str.maketrans("", "", special_symbols)
+
+        cleaned_string = item_name.translate(translation_table)
         stmt = f"""
                 SELECT ROW_TO_JSON(item.*)
                 FROM item
-                WHERE name = '{item_name}'
+                WHERE name = '{cleaned_string}'
                 """
         result = await db.fetch_rows(stmt)
 
@@ -90,7 +99,8 @@ class OrderController:
     @staticmethod
     async def _chat_gpt_describe_answer(db: ConnectionDB, conv_in: ConversationIn):
         item: ItemInDB = await OrderController._get_item_by_name(db, conv_in)  # type: ignore
-
+        if not item:
+            return await OrderController._error_answer(db, conv_in.order_id)
         openai_answer = await get_item_description(item.name)
         conv_out = ConversationIn(
             order_id=conv_in.order_id, owner="bot", replica=openai_answer

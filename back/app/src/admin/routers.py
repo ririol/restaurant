@@ -23,7 +23,7 @@ async def get_all_orders():
     return await AdminController.get_all_orders(conn_db)
 
 
-# bonus
+# TODO: bonus
 @admin_router.post("/items/")
 async def add_item():
     pass
