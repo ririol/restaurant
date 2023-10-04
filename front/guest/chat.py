@@ -1,6 +1,8 @@
 import requests
 
-backend_url = "http://localhost:8000"
+from front.config import BACKEND_URL
+
+backend_url = BACKEND_URL
 
 
 def start_conversation(st):
@@ -11,10 +13,24 @@ def start_conversation(st):
             bot_message = response.json()["replica"]
 
             st.session_state["order_id"] = order_id
-
             st.session_state.history.append(("bot", bot_message))
         else:
             st.error("Failed to start conversation. Please try again later.")
+
+    if "commands" not in st.session_state:
+        commands = (requests.get(f"{backend_url}/guest/get_commands/")).json()
+        st.session_state["commands"] = commands
+
+    st.sidebar.write("Availble commands")
+    for i, command in enumerate(st.session_state["commands"]):
+        st.sidebar.write(i + 1, command)
+
+    if "menu" not in st.session_state:
+        menu = (requests.get(f"{backend_url}/guest/get_menu/")).json()
+        st.session_state["menu"] = menu
+
+    st.sidebar.write("Menu")
+    st.sidebar.table(st.session_state["menu"])
 
 
 def send_message(st, message):
@@ -41,6 +57,7 @@ def chat_dialog(st):
 def guest_interface(st):
     if "history" not in st.session_state:
         st.session_state.history = []
+
     start_conversation(st)
     chat_dialog(st)
     for owner, message in st.session_state.history:

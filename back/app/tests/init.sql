@@ -207,6 +207,14 @@ ALTER TABLE public.order_items ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY 
 
 
 --
+-- Name: item item_name_unique; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.item
+    ADD CONSTRAINT item_name_unique UNIQUE (name);
+
+
+--
 -- Name: item item_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -220,14 +228,6 @@ ALTER TABLE ONLY public.item
 
 ALTER TABLE ONLY public.order_items
     ADD CONSTRAINT order_items_pkey PRIMARY KEY (id);
-
-
---
--- Name: order order_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public."order"
-    ADD CONSTRAINT order_pkey PRIMARY KEY (id);
 
 
 --
@@ -264,22 +264,6 @@ CREATE TRIGGER order_total_after_insert_trigger AFTER INSERT ON public.order_ite
 
 ALTER TABLE ONLY public.order_items
     ADD CONSTRAINT item_id FOREIGN KEY (item_id) REFERENCES public.item(id);
-
-
---
--- Name: order_items order_id; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.order_items
-    ADD CONSTRAINT order_id FOREIGN KEY (order_id) REFERENCES public."order"(id);
-
-
---
--- Name: conversation order_id; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.conversation
-    ADD CONSTRAINT order_id FOREIGN KEY (order_id) REFERENCES public."order"(id);
 
 
 --

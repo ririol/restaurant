@@ -2,14 +2,13 @@ from fastapi import APIRouter
 
 from app.src.db import conn_db
 from app.src.admin.controllers import AdminController
-from app.src.admin.schemas import Stats
-
+from app.src.admin.schemas import ItemIn
 
 admin_router = APIRouter(prefix="/admin")
 
 
 @admin_router.get("/stats/")
-async def get_statistic() -> Stats:
+async def get_statistic():
     return await AdminController.get_stats(conn_db)
 
 
@@ -25,5 +24,10 @@ async def get_all_orders():
 
 # TODO: bonus
 @admin_router.post("/items/")
-async def add_item():
-    pass
+async def add_item(item: ItemIn):
+    return await AdminController.add_item(conn_db, item)
+
+
+@admin_router.get("/menu/")
+async def get_menu():
+    return await AdminController.get_menu(conn_db)

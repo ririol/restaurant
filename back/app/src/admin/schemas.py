@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, NonNegativeFloat
 
 from app.src.restaurant.schemas import (
     ConversationInDB,
@@ -35,3 +35,10 @@ class Stats(BaseModel):
     order_stats: OrderStat
     item_stats: list[ItemStats]
     upsell_stat: UpsellStats
+
+
+class ItemIn(BaseModel):
+    name: str
+    count: int
+    is_primary: bool
+    price: NonNegativeFloat

@@ -1,5 +1,3 @@
-import re
-
 from app.src.db import ConnectionDB
 from app.src.restaurant.schemas import (
     ConversationIn,
@@ -7,7 +5,7 @@ from app.src.restaurant.schemas import (
     ItemInDB,
     OrderInDB,
 )
-from app.src.restaurant.client import get_item_description
+from app.src.restaurant.open_ai_request import get_item_description
 
 SPECIAL_SYMBOLS = "!@#$%^&*()_+{}\[\]:;<>,.?~\\|`\"'"
 
@@ -17,18 +15,18 @@ class OrderController:
     async def create_order(db: ConnectionDB) -> int:
         stmt = "INSERT INTO public.order DEFAULT VALUES RETURNING id;"
         order_id = await db.fetch_rows(stmt)
-        return order_id[0][0]
+        return order_id[0]["id"]
 
     @staticmethod
     async def write_replica(db: ConnectionDB, conv: ConversationIn) -> ConversationInDB:
         stmt = f"""
                 INSERT INTO public.conversation (order_id, owner, replica) 
                 VALUES (%s, %s, %s)
-                RETURNING ROW_TO_JSON(public.conversation.*)
+                RETURNING public.conversation.*
                 """
         values = (conv.order_id, conv.owner, conv.replica)
         result = await db.fetch_rows(stmt, values)
-        conv_db = ConversationInDB(**result[0][0])
+        conv_db = ConversationInDB(**result[0])
 
         return conv_db
 
@@ -38,22 +36,19 @@ class OrderController:
     async def _get_item_by_name(db: ConnectionDB, conv_in: ConversationIn):
         item_pos = conv_in.replica.find(" a")
         item_name = conv_in.replica[item_pos + 3 :].strip()
-        special_symbols = "!@#$%^&*()_+{}\[\]:;<>,.?~\\|`\"'"
-
-        translation_table = str.maketrans("", "", special_symbols)
-
-        cleaned_string = item_name.translate(translation_table)
+        translation_table = str.maketrans("", "", SPECIAL_SYMBOLS)
+        cleaned_item_name = item_name.translate(translation_table)
         stmt = f"""
-                SELECT ROW_TO_JSON(item.*)
+                SELECT item.*
                 FROM item
-                WHERE name = '{cleaned_string}'
+                WHERE name = '{cleaned_item_name}'
                 """
         result = await db.fetch_rows(stmt)
-
+        
         # TODO: create it as exception to avoid type hint errors
         if not result:
             return result
-        return ItemInDB(**result[0][0])
+        return ItemInDB(**result[0])
 
     @staticmethod
     async def _error_answer(db: ConnectionDB, conv_id: int):
@@ -88,12 +83,19 @@ class OrderController:
         return await OrderController.write_replica(db, conv_out)
 
     @staticmethod
-    async def _close_conversation_answer(db: ConnectionDB, conv_in: ConversationIn):
-        order = await OrderController.get_order(db, conv_in.order_id)
+    async def _close_conversation_answer(
+        db: ConnectionDB, conv_in: ConversationIn, order: OrderInDB
+    ):
         replica = f"Your total is ${order.total}. Thank you and have a nice day!"
         conv_out = ConversationIn(
             order_id=conv_in.order_id, owner="bot", replica=replica
         )
+        return await OrderController.write_replica(db, conv_out)
+
+    @staticmethod
+    async def _empty_order_answer(db: ConnectionDB, conn_id: int):
+        replica = f"Your order is empty. Please order something to end conversation"
+        conv_out = ConversationIn(order_id=conn_id, owner="bot", replica=replica)
         return await OrderController.write_replica(db, conv_out)
 
     @staticmethod
@@ -110,14 +112,14 @@ class OrderController:
     @staticmethod
     async def _add_random_upsell_item_to_order(db: ConnectionDB, order_id: int):
         stmt = f"""
-                SELECT ROW_TO_JSON(item.*)
+                SELECT item.*
                 FROM item
                 WHERE is_primary = false
                 ORDER BY RANDOM()
                 LIMIT 1
                 """
         result = await db.fetch_rows(stmt)
-        upsell_item = ItemInDB(**result[0][0])
+        upsell_item = ItemInDB(**result[0])
         stmt = f"""
                 INSERT INTO public.order_items (order_id, item_id, is_upselled)
                 VALUES ({order_id}, {upsell_item.id}, true);
@@ -130,12 +132,12 @@ class OrderController:
     @staticmethod
     async def get_order(db: ConnectionDB, order_id: int) -> OrderInDB:
         stmt = f"""
-                SELECT ROW_TO_JSON(public.order.*)
+                SELECT public.order.*
                 FROM public.order
                 WHERE id = {order_id} 
                 """
         result = await db.fetch_rows(stmt)
-        order = OrderInDB(**result[0][0])
+        order = OrderInDB(**result[0])
 
         return order
 
@@ -157,7 +159,8 @@ class OrderController:
                 WHERE id = {order_id}
                 """
         result = await db.fetch_rows(stmt)
-        return result[0][0]
+
+        return result[0]["was_suggested"]
 
     @staticmethod
     async def get_order_length(db: ConnectionDB, order_id: int) -> int:
@@ -167,7 +170,7 @@ class OrderController:
                 WHERE order_id = {order_id};
                 """
         result = await db.fetch_rows(stmt)
-        order_len = result[0][0]
+        order_len = result[0]["count"]
         return order_len
 
     @staticmethod
@@ -183,7 +186,7 @@ class OrderController:
 
         stmt = f"""
                 INSERT INTO public.order_items (order_id, item_id)
-                VALUES ({order_id}, {item.id});                                             
+                VALUES ({order_id}, {item.id});
                 """
         await db.fetch_rows(stmt)
 
@@ -207,17 +210,21 @@ class OrderController:
                             WHERE oi.order_id = {order_id} AND i.is_primary = false
                         ) THEN false
                         ELSE true
-                    END AS are_items_not_primary
+                    END AS is_item_primary
                 FROM
                     public.order o
                 WHERE 
                     o.id = {order_id}
                 """
         result = await db.fetch_rows(stmt)
-        return result[0][0]
+
+        return result[0]["is_item_primary"]
 
     @staticmethod
     async def close_conversation(db: ConnectionDB, conv_in: ConversationIn):
+        order = await OrderController.get_order(db, conv_in.order_id)
+        if order.total == 0.0:
+            return await OrderController._empty_order_answer(db, conv_in.order_id)
         stmt = f"""
                 UPDATE public.order
                 SET is_closed = true
@@ -225,7 +232,7 @@ class OrderController:
                 """
         await db.fetch_rows(stmt)
 
-        return await OrderController._close_conversation_answer(db, conv_in)
+        return await OrderController._close_conversation_answer(db, conv_in, order)
 
     @staticmethod
     async def discard_item(db: ConnectionDB, conv_in: ConversationIn):
@@ -258,7 +265,7 @@ class OrderController:
                 WHERE order_id = {conv_in.order_id};
                 """
         result = await db.fetch_rows(stmt)
-        order_len = result[0][0]
+        order_len = result[0]["count"]
         return order_len
 
     @staticmethod
@@ -282,9 +289,22 @@ class OrderController:
     @staticmethod
     async def get_list_of_items(db: ConnectionDB) -> list[ItemInDB]:
         stmt = f"""
-                SELECT ROW_TO_JSON(i.*) 
+                SELECT i.*
                 FROM item AS i
                 ORDER BY i.id;
                 """
         result = await db.fetch_rows(stmt)
-        return [ItemInDB(**i[0]) for i in result]
+        return [ItemInDB(**i) for i in result]
+
+    @staticmethod
+    async def get_menu(db: ConnectionDB):
+        stmt = f"""
+                SELECT name, price
+                FROM (
+                  SELECT name, price
+                  FROM item
+                  ORDER BY is_primary DESC
+                ) AS sorted_data; 
+                """
+        result = await db.fetch_rows(stmt)
+        return result

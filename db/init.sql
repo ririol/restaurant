@@ -1,14 +1,3 @@
---
--- PostgreSQL database dump
---
-
--- Dumped from database version 14.4
--- Dumped by pg_dump version 14.4
-
---
--- Name: decrease_item_count(); Type: FUNCTION; Schema: public; Owner: postgres
---
-
 CREATE FUNCTION public.decrease_item_count() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -20,6 +9,8 @@ BEGIN
     RETURN NEW;
 END;
 $$;
+
+
 ALTER FUNCTION public.decrease_item_count() OWNER TO postgres;
 
 --
@@ -37,6 +28,8 @@ BEGIN
     RETURN OLD;
 END;
 $$;
+
+
 ALTER FUNCTION public.increase_item_count() OWNER TO postgres;
 
 --
@@ -59,6 +52,8 @@ BEGIN
     RETURN NEW;
 END;
 $$;
+
+
 ALTER FUNCTION public.update_order_total() OWNER TO postgres;
 
 --
@@ -81,6 +76,8 @@ BEGIN
     RETURN NEW;
 END;
 $$;
+
+
 ALTER FUNCTION public.update_order_total_after_delete() OWNER TO postgres;
 
 SET default_tablespace = '';
@@ -93,7 +90,7 @@ SET default_table_access_method = heap;
 
 CREATE TABLE public.conversation (
     order_id integer NOT NULL,
-    "time" timestamp without time zone DEFAULT date_trunc('second'::text, timezone('utc'::text, now())) NOT NULL,
+    "time" timestamp without time zone DEFAULT date_trunc('second'::text, (now())::timestamp without time zone) NOT NULL,
     owner character varying(10) NOT NULL,
     replica character varying(512) NOT NULL
 );
@@ -137,9 +134,9 @@ ALTER TABLE public.item ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
 CREATE TABLE public."order" (
     id integer NOT NULL,
     total numeric(6,2) DEFAULT 0 NOT NULL,
-    "time" timestamp without time zone DEFAULT date_trunc('second'::text, timezone('utc'::text, now())),
-    was_suggested boolean DEFAULT false,
-    is_closed boolean DEFAULT false
+    "time" timestamp without time zone DEFAULT date_trunc('second'::text, (now())::timestamp without time zone) NOT NULL,
+    was_suggested boolean DEFAULT false NOT NULL,
+    is_closed boolean DEFAULT false NOT NULL
 );
 
 
@@ -166,7 +163,8 @@ ALTER TABLE public."order" ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
 CREATE TABLE public.order_items (
     order_id integer NOT NULL,
     item_id integer NOT NULL,
-    id integer NOT NULL
+    id integer NOT NULL,
+    is_upselled boolean DEFAULT false NOT NULL
 );
 
 
@@ -187,6 +185,14 @@ ALTER TABLE public.order_items ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY 
 
 
 --
+-- Name: item item_name_unique; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.item
+    ADD CONSTRAINT item_name_unique UNIQUE (name);
+
+
+--
 -- Name: item item_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -200,14 +206,6 @@ ALTER TABLE ONLY public.item
 
 ALTER TABLE ONLY public.order_items
     ADD CONSTRAINT order_items_pkey PRIMARY KEY (id);
-
-
---
--- Name: order order_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public."order"
-    ADD CONSTRAINT order_pkey PRIMARY KEY (id);
 
 
 --
@@ -246,22 +244,8 @@ ALTER TABLE ONLY public.order_items
     ADD CONSTRAINT item_id FOREIGN KEY (item_id) REFERENCES public.item(id);
 
 
---
--- Name: order_items order_id; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
+COPY item(id, name, count, is_primary, price)
+FROM '/code/db/items.csv'
+WITH (FORMAT csv, HEADER true);
 
-ALTER TABLE ONLY public.order_items
-    ADD CONSTRAINT order_id FOREIGN KEY (order_id) REFERENCES public."order"(id);
-
-
---
--- Name: conversation order_id; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.conversation
-    ADD CONSTRAINT order_id FOREIGN KEY (order_id) REFERENCES public."order"(id);
-
-
---
--- PostgreSQL database dump complete
---
+SELECT pg_catalog.setval('public.item_id_seq', 5, true);

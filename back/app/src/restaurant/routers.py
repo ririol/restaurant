@@ -20,6 +20,9 @@ async def start_conversation() -> ConversationInDB:
 @guest_router.post("/dialog/")
 async def dialog(conv_in: ConversationIn) -> ConversationInDB:
     await OrderController.write_replica(conn_db, conv_in)
+    conv_in.replica = conv_in.replica.strip()
+    # check is it upsell stage, must be first in my implementation
+    # rewrite in future
     if await OrderController.was_suggested(conn_db, conv_in.order_id):
         return await upsell(conn_db, conv_in)
 
@@ -52,3 +55,21 @@ async def upsell(conn_db, conv_in: ConversationIn) -> ConversationInDB:
 
     else:
         return await OrderController._error_answer(conn_db, conv_in.order_id)
+
+
+@guest_router.get("/get_commands/")
+async def get_commands():
+    commands = {
+        "I'd like a(an) X.",
+        "I don't want a(an) X.",
+        "That's all.",
+        "Yes, please.",
+        "No, thank you.",
+        "What is X?",
+    }
+    return commands
+
+
+@guest_router.get("/get_menu/")
+async def get_menu():
+    return await OrderController.get_menu(conn_db)

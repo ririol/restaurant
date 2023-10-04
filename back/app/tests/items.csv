@@ -1,6 +1,6 @@
 id,name,count,is_primary,price
+1,Croissant,100,t,2.14
 2,Cheesecake,100,t,1.45
-5,Coffee,100,f,0.70
 3,Donut,100,t,2.54
 4,Cinnamon bun,100,t,3.10
-1,Croissant,100,t,2.14
+5,Coffee,100,f,0.70

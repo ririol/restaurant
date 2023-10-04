@@ -8,7 +8,7 @@ from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 from app.config import DB_NAME, DB_PASS, DB_USER, DB_PORT
 from app.src.db import conn_db
 
-DB_HOST = "localhost"
+DB_HOST = "db"
 
 DSN = (
     f"dbname={DB_NAME} user={DB_USER} password={DB_PASS} host={DB_HOST} port={DB_PORT}"
@@ -50,6 +50,9 @@ def init_tables():
             cursor.execute(sql_script)
         cursor.execute(
             f"COPY public.item FROM '{item_csv_path}' DELIMITER ',' CSV HEADER;"
+        )
+        cursor.execute(
+            "SELECT setval(pg_get_serial_sequence('public.item', 'id'), (SELECT max(id) FROM public.item));"
         )
         conn.commit()
         conn.close()

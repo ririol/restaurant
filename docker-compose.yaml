@@ -1,30 +1,41 @@
 services:
   db:
-    build: db
-    environment:
-      - POSTGRES_PASSWORD={$DB_PASS}
-      - POSTGRES_USER={$DB_USER}
-      - POSTGRES_DB={$DB_NAME}
+    build: ./db
     ports:
       - "5432:5432"
     volumes:
-      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./db:/code/db
+    restart: always
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASS}
+      - POSTGRES_DB=${DB_NAME}
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 3s
+      timeout: 5s
+      retries: 5
     
   back:
-    build: app
+    build:
+      context: ./back/app
+      dockerfile: Dockerfile
     environment:
       - PYTHONUNBUFFERED=0
     volumes:
-      - ./app:/code/app
+      - ./back/app:/code/app
     ports:
       - "80:80"
     depends_on:
       - db
+    #command: tail -f /dev/null
 
   front:
-    build: front
+    build:
+      context: ./front
+      dockerfile: Dockerfile
     ports:
-      - "80:7777"
+      - "8501:8501"
     volumes:
       - ./front:/code/front
     depends_on:
