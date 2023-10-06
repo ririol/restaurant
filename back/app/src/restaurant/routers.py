@@ -1,7 +1,7 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, WebSocket
 
 from app.src.db import conn_db
-from .controllers import OrderController
+from .controllers import OrderController, WebscoketConroller
 from app.src.restaurant.schemas import ConversationIn, ConversationInDB
 
 
@@ -60,12 +60,12 @@ async def upsell(conn_db, conv_in: ConversationIn) -> ConversationInDB:
 @guest_router.get("/get_commands/")
 async def get_commands():
     commands = {
-        "I'd like a(an) X.",
-        "I don't want a(an) X.",
-        "That's all.",
-        "Yes, please.",
-        "No, thank you.",
-        "What is X?",
+        1: "I'd like a X.",
+        2: "I don't want a X.",
+        3: "That's all.",
+        4: "Yes, please.",
+        5: "No, thank you.",
+        6: "What is a X?",
     }
     return commands
 
@@ -73,3 +73,8 @@ async def get_commands():
 @guest_router.get("/get_menu/")
 async def get_menu():
     return await OrderController.get_menu(conn_db)
+
+
+@guest_router.websocket("/ws")
+async def websocket_reminder(websocket: WebSocket):
+    await WebscoketConroller.start(websocket) 

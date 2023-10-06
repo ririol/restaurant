@@ -2,13 +2,18 @@ import asyncio
 import psycopg2 as ps
 import pytest
 from httpx import AsyncClient
+import platform
 
 from app.src.main import app
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 from app.config import DB_NAME, DB_PASS, DB_USER, DB_PORT
 from app.src.db import conn_db
 
-DB_HOST = "db"
+
+asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+
+DB_HOST = "localhost"
 
 DSN = (
     f"dbname={DB_NAME} user={DB_USER} password={DB_PASS} host={DB_HOST} port={DB_PORT}"

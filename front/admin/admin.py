@@ -1,14 +1,14 @@
 import requests
 
-from front.config import BACKEND_URL
+from front.config import BACKEND_HTTP
 
 
 def admin_interface(st):
-    stats = (requests.get(f"{BACKEND_URL}/admin/stats/")).json()
-    data = (requests.get(f"{BACKEND_URL}/admin/orders/")).json()
+    stats = (requests.get(f"{BACKEND_HTTP}/admin/stats/")).json()
+    data = (requests.get(f"{BACKEND_HTTP}/admin/orders/")).json()
     orders = data["orders"]
-    items = data["item"]
-    conversations = data["conversation"]
+    items = [inner_dict["items"] for inner_dict in data["item"]]
+    conversations =  [inner_dict["conversations"] for inner_dict in data["conversation"]]
     order_stats = stats["order_stats"]
     item_stats = stats["item_stats"]
     upsell_stat = stats["upsell_stat"]
@@ -33,7 +33,7 @@ def admin_interface(st):
             st.write(f"Total: {upsell_stat['total']:.2f}")
 
     with st.container():
-        menu = (requests.get(f"{BACKEND_URL}/admin/menu/")).json()
+        menu = (requests.get(f"{BACKEND_HTTP}/admin/menu/")).json()
         st.subheader("Upsell Statistics")
         st.table(menu)
         cc1, cc2, cc3, cc4 = st.columns(4)
@@ -55,10 +55,10 @@ def admin_interface(st):
                     "is_primary": is_primary,
                     "price": price,
                 }
-            try:
-                requests.post(f"{BACKEND_URL}/admin/items/")
-            except Exception:
-                print(Exception)
+                try:
+                    requests.post(f"{BACKEND_HTTP}/admin/items/", json=item)
+                except Exception:
+                    print(Exception)
 
     with st.container():
         for order, order_items, conversation in zip(orders, items, conversations):
@@ -76,3 +76,4 @@ def admin_interface(st):
                         )
 
                 st.table(order_items)
+

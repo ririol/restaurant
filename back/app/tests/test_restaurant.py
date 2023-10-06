@@ -4,7 +4,6 @@ from httpx import AsyncClient
 
 from app.src.restaurant.schemas import ConversationInDB
 
-
 if platform.platform() == "Windows":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
@@ -91,6 +90,10 @@ async def test_admin_stats(ac: AsyncClient):
     assert result.json() == order_stats
 
 
+async def test_items_list(ac: AsyncClient):
+    result = await ac.get("admin/orders/")
+
+
 async def test_run_out_of_item(ac: AsyncClient):
     order_id = await start_order(ac)
     replica = "No, thank you."
@@ -173,3 +176,5 @@ async def test_create_new_item(ac: AsyncClient):
         {"id": 6, "name": "Baton", "count": 100, "is_primary": True, "price": 2.0},
     ]
     assert response.json() == items_in_db_after_test
+
+

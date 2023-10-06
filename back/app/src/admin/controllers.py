@@ -9,7 +9,9 @@ class AdminController:
         # items: list[ItemInDB]
         # replics: list[ConversationInDB]
         stmt = """
-                SELECT * FROM public.order o WHERE o.is_closed = true;
+                SELECT * FROM public.order o 
+                WHERE o.is_closed = true
+                ORDER BY o.id ASC;
                 """
         orders = [OrderInDB(**order) for order in await db.fetch_rows(stmt)]
 
@@ -21,27 +23,27 @@ class AdminController:
                     'is_primary', i.is_primary,
                     'price', i.price,
                     'is_upselled', oi.is_upselled
-                ))
+                )) as items
                 FROM public.order o
                 INNER JOIN order_items oi ON oi.order_id = o.id
                 INNER JOIN item i ON oi.item_id = i.id
                 WHERE o.is_closed = true
-                GROUP BY o.id;
+                GROUP BY o.id
+                ORDER BY o.id ASC;
                 """
 
-        items = [inner_dict["json_agg"] for inner_dict in await db.fetch_rows(stmt)]
+        items =await db.fetch_rows(stmt)
 
         stmt = """
-                SELECT json_agg(c)
+                SELECT json_agg(c) as conversations
                 FROM conversation c
                 INNER JOIN public.order o ON o.id = c.order_id AND o.is_closed = true
                 GROUP BY o.id
                 ORDER BY o.id ASC;
                 """
 
-        conversations = [
-            inner_dict["json_agg"] for inner_dict in await db.fetch_rows(stmt)
-        ]
+        conversations = await db.fetch_rows(stmt)
+
 
         return {"orders": orders, "item": items, "conversation": conversations}
 

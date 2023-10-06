@@ -1,8 +1,8 @@
 import requests
 
-from front.config import BACKEND_URL
+from front.config import BACKEND_HTTP
 
-backend_url = BACKEND_URL
+backend_url = BACKEND_HTTP
 
 
 def start_conversation(st):
@@ -22,8 +22,8 @@ def start_conversation(st):
         st.session_state["commands"] = commands
 
     st.sidebar.write("Availble commands")
-    for i, command in enumerate(st.session_state["commands"]):
-        st.sidebar.write(i + 1, command)
+    for key in st.session_state["commands"]:
+        st.sidebar.write(int(key),st.session_state["commands"][key])
 
     if "menu" not in st.session_state:
         menu = (requests.get(f"{backend_url}/guest/get_menu/")).json()

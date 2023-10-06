@@ -4,6 +4,7 @@ WORKDIR /code/app
 
 COPY ./ ./
 
+RUN pip install aiopg fastapi uvicorn
 RUN pip install  -r requirements.txt
 # --no-cache-dir --upgrade
 EXPOSE 80

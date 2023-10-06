@@ -1,3 +1,6 @@
+import asyncio
+from fastapi import WebSocket
+
 from app.src.db import ConnectionDB
 from app.src.restaurant.schemas import (
     ConversationIn,
@@ -114,11 +117,13 @@ class OrderController:
         stmt = f"""
                 SELECT item.*
                 FROM item
-                WHERE is_primary = false
+                WHERE is_primary = false and count > 0
                 ORDER BY RANDOM()
                 LIMIT 1
                 """
         result = await db.fetch_rows(stmt)
+        if not result:
+            return await OrderController._suggest_next_item_answer(db, order_id)
         upsell_item = ItemInDB(**result[0])
         stmt = f"""
                 INSERT INTO public.order_items (order_id, item_id, is_upselled)
@@ -308,3 +313,26 @@ class OrderController:
                 """
         result = await db.fetch_rows(stmt)
         return result
+
+class WebscoketConroller:  
+    
+    @staticmethod
+    async def start(websocket: WebSocket):
+        await websocket.accept()
+        async def timer():
+            while True:
+                await asyncio.sleep(15)
+                await websocket.send_text("Reminder: You've been idle for 15 seconds.")
+        
+        timer_task = asyncio.create_task(timer())
+
+        try:
+            while True:
+                data = await websocket.receive_text()
+                await websocket.send_text(f"OK")
+                timer_task.cancel()
+                timer_task = asyncio.create_task(timer())
+        except asyncio.CancelledError:
+            pass
+        finally:
+            timer_task.cancel()
